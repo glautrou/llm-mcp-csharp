@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "todo-api": {
+      "type": "http",
+      "url": "http://localhost:5000/mcp"
+    }
+  }
+}

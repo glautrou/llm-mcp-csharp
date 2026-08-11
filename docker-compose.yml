@@ -1,0 +1,21 @@
+services:
+  keycloak:
+    build: ./keycloak
+    image: todo-mcp-keycloak:26.7.1
+    container_name: todo-mcp-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Compte d'administration de la console, pour inspecter la configuration.
+      # Démonstration locale uniquement : à ne jamais reproduire ailleurs.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      # 8081 côté hôte : 8080 reste libre pour la redirection OAuth des clients.
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s

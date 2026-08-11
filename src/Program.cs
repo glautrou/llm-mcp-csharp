@@ -7,22 +7,17 @@ using TodoApi.Tools;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Valeurs à renseigner en secrets utilisateur (dotnet user-secrets), jamais en dur.
-var tenantId = Required("AzureAd:TenantId");
-var apiClientId = Required("AzureAd:ClientId");
+var authority = Required("Oidc:Authority");
+var audience = Required("Oidc:Audience");
+var requiredScope = Required("Oidc:RequiredScope");
 var serverUrl = builder.Configuration["ServerUrl"] ?? "http://localhost:5000";
 
 string Required(string key) => builder.Configuration[key] is { Length: > 0 } value
     ? value
     : throw new InvalidOperationException($"Configuration « {key} » manquante. Voir le README.");
 
-var authority = $"https://login.microsoftonline.com/{tenantId}/v2.0";
-var audience = $"api://{apiClientId}";
-var requiredScope = "Todos.ReadWrite";
-
-// URL canonique du serveur MCP. Claude l'envoie comme paramètre `resource`
-// (RFC 8707) : Entra ID émet alors un jeton dont l'audience est cette URL,
-// et non `api://<id-client>`. Les deux audiences sont donc acceptées.
+// URL canonique du serveur MCP, telle que l'utilisateur la saisit dans son
+// client. Les métadonnées doivent la reprendre exactement, chemin compris.
 var mcpResourceUrl = $"{serverUrl.TrimEnd('/')}/mcp";
 
 builder.Services.AddAuthentication(options =>
@@ -35,11 +30,15 @@ builder.Services.AddAuthentication(options =>
     .AddJwtBearer(options =>
     {
         options.Authority = authority;
-        options.TokenValidationParameters.ValidAudiences = [audience, mcpResourceUrl];
+        options.Audience = audience;
+
+        // Le Keycloak de démonstration est en HTTP sur la machine locale.
+        // En production, l'autorité est en HTTPS et cette ligne disparaît.
+        options.RequireHttpsMetadata = builder.Environment.IsProduction();
 
         // Sans cette ligne, ASP.NET Core renomme les claims entrants
-        // (`oid` devient une longue URI de schéma). On garde les noms émis
-        // par Entra ID pour que le code parle le même langage que le jeton.
+        // (`sub` devient une longue URI de schéma). On garde les noms émis
+        // par le serveur d'autorisation.
         options.MapInboundClaims = false;
     })
     .AddMcp(options =>
@@ -48,11 +47,9 @@ builder.Services.AddAuthentication(options =>
         // le client MCP découvre où obtenir un jeton et pour quel scope.
         options.ResourceMetadata = new()
         {
-            // Doit correspondre exactement à l'URL que l'utilisateur saisit
-            // dans son client, chemin compris.
             Resource = mcpResourceUrl,
             AuthorizationServers = { authority },
-            ScopesSupported = [$"{audience}/{requiredScope}"],
+            ScopesSupported = [requiredScope],
         };
     });
 
@@ -60,9 +57,9 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy(CallerIdentity.TodosPolicy, policy =>
         policy.RequireAuthenticatedUser()
-            // Entra ID publie les scopes délégués dans le claim `scp`, sous la
-            // forme d'une seule chaîne séparée par des espaces : il faut donc
-            // l'éclater plutôt que comparer la valeur entière.
+            // Le claim `scope` contient tous les scopes accordés dans une
+            // seule chaîne séparée par des espaces : il faut l'éclater
+            // plutôt que comparer la valeur entière.
             .RequireAssertion(context => context.User
                 .FindAll(CallerIdentity.ScopeClaim)
                 .SelectMany(claim => claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries))
