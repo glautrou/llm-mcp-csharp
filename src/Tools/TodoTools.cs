@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using ModelContextProtocol;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using TodoApi.Models;
 using TodoApi.Stores;
@@ -10,7 +12,7 @@ namespace TodoApi.Tools;
 /// l'interface que le modèle lit pour choisir quoi appeler.
 /// </summary>
 [McpServerToolType]
-public sealed class TodoTools(InMemoryTodoStore store)
+public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger)
 {
     [McpServerTool(Name = "lister_todos")]
     [Description("Liste toutes les tâches de l'utilisateur, terminées ou non.")]
@@ -39,10 +41,103 @@ public sealed class TodoTools(InMemoryTodoStore store)
             : "Aucune tâche ne porte cet identifiant.";
 
     [McpServerTool(Name = "supprimer_todo")]
-    [Description("Supprime définitivement une tâche de la liste.")]
+    [Description("Supprime définitivement une tâche de la liste. La suppression d'une tâche importante exige une raison confirmée par l'utilisateur.")]
     public string DeleteTodo(
-        [Description("Identifiant de la tâche")] Guid id) =>
-        store.Delete(id, DemoUser.Id)
-            ? "Tâche supprimée."
-            : "Aucune tâche ne porte cet identifiant.";
+        McpServer server,
+        RequestContext<CallToolRequestParams> context,
+        [Description("Identifiant de la tâche")] Guid id,
+        [Description("Raison de la suppression (obligatoire pour une tâche importante)")] string? reason = null)
+    {
+        // L'importance est TOUJOURS lue côté serveur, jamais reçue en paramètre :
+        // un paramètre « estImportante » pourrait être menti par le modèle
+        // pour contourner la confirmation.
+        if (store.Get(id, DemoUser.Id) is not { } todo)
+        {
+            return "Aucune tâche ne porte cet identifiant.";
+        }
+
+        // Tâche ordinaire : raison facultative, suppression immédiate.
+        if (!todo.IsImportant)
+        {
+            store.Delete(id, DemoUser.Id);
+            logger.LogInformation("Tâche {TodoId} supprimée. Raison : {Reason}", id, reason ?? "(aucune)");
+            return $"Tâche « {todo.Title} » supprimée.";
+        }
+
+        // Tâche importante : la raison doit venir de l'utilisateur.
+        // Quatre scénarios selon les capacités du client :
+        //  1. la raison est fournie d'emblée dans l'appel ;
+        //  2. retour de round-trip : le client renvoie la réponse de l'utilisateur ;
+        //  3. client MRTR : on suspend l'appel pour demander la raison ;
+        //  4. client sans MRTR ni session : on guide le modèle.
+
+        // (1) Raison fournie d'emblée.
+        var confirmedReason = reason;
+
+        // (2) Retour de round-trip : l'utilisateur a répondu à l'elicitation.
+        if (string.IsNullOrWhiteSpace(confirmedReason) &&
+            context.Params?.InputResponses?.TryGetValue("reason", out var response) is true)
+        {
+            ElicitResult? result;
+            try
+            {
+                result = response.Deserialize(InputResponse.ElicitResultJsonTypeInfo);
+            }
+            catch (Exception ex)
+            {
+                // Erreur technique : le détail part dans les logs, le modèle
+                // ne reçoit qu'un message neutre.
+                logger.LogError(ex, "Réponse d'elicitation illisible pour la tâche {TodoId}", id);
+                throw new McpException("La réponse de confirmation n'a pas pu être lue.");
+            }
+
+            // decline ou cancel : la tâche reste en place.
+            if (result?.IsAccepted is not true)
+            {
+                return "Suppression annulée : l'utilisateur n'a pas confirmé.";
+            }
+
+            confirmedReason = result.Content?.TryGetValue("reason", out var value) is true
+                ? value.GetString()
+                : null;
+        }
+
+        // (1) ou (2) : une raison est disponible, on peut supprimer.
+        if (!string.IsNullOrWhiteSpace(confirmedReason))
+        {
+            store.Delete(id, DemoUser.Id);
+            logger.LogInformation("Tâche importante {TodoId} supprimée. Raison : {Reason}", id, confirmedReason);
+            return $"Tâche importante « {todo.Title} » supprimée. Raison : {confirmedReason}";
+        }
+
+        // (3) Le client sait relayer une demande d'input : on suspend l'appel
+        //     et la question part à l'utilisateur — pas au modèle.
+        if (server.IsMrtrSupported)
+        {
+            throw new InputRequiredException(
+                inputRequests: new Dictionary<string, InputRequest>
+                {
+                    ["reason"] = InputRequest.ForElicitation(new ElicitRequestParams
+                    {
+                        Message = $"« {todo.Title} » est une tâche importante. Confirmez sa suppression en indiquant une raison.",
+                        RequestedSchema = new()
+                        {
+                            Properties =
+                            {
+                                ["reason"] = new ElicitRequestParams.StringSchema
+                                {
+                                    Title = "Raison de la suppression",
+                                    Description = "Pourquoi supprimer cette tâche importante ?",
+                                },
+                            },
+                        },
+                    }),
+                },
+                requestState: id.ToString());
+        }
+
+        // (4) Aucun canal vers l'utilisateur : on explique au modèle quoi faire.
+        return $"« {todo.Title} » est une tâche importante : sa suppression exige une raison. " +
+               "Demandez la raison à l'utilisateur puis rappelez supprimer_todo avec le paramètre reason.";
+    }
 }
