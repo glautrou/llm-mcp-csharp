@@ -59,7 +59,12 @@ public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger
         // Tâche ordinaire : raison facultative, suppression immédiate.
         if (!todo.IsImportant)
         {
-            store.Delete(id, DemoUser.Id);
+            // Delete échoue si la tâche vient d'être supprimée par un autre appel.
+            if (!store.Delete(id, DemoUser.Id))
+            {
+                return "Aucune tâche ne porte cet identifiant.";
+            }
+
             logger.LogInformation("Tâche {TodoId} supprimée. Raison : {Reason}", id, reason ?? "(aucune)");
             return $"Tâche « {todo.Title} » supprimée.";
         }
@@ -105,7 +110,12 @@ public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger
         // (1) ou (2) : une raison est disponible, on peut supprimer.
         if (!string.IsNullOrWhiteSpace(confirmedReason))
         {
-            store.Delete(id, DemoUser.Id);
+            // Delete échoue si la tâche vient d'être supprimée par un autre appel.
+            if (!store.Delete(id, DemoUser.Id))
+            {
+                return "Aucune tâche ne porte cet identifiant.";
+            }
+
             logger.LogInformation("Tâche importante {TodoId} supprimée. Raison : {Reason}", id, confirmedReason);
             return $"Tâche importante « {todo.Title} » supprimée. Raison : {confirmedReason}";
         }
