@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "todo-api": {
+      "type": "http",
+      "url": "http://localhost:5000/mcp",
+      "oauth": {
+        "clientId": "<id-application-de-todo-mcp-client>",
+        "callbackPort": 8080
+      }
+    }
+  }
+}

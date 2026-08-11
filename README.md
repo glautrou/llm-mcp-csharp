@@ -87,19 +87,13 @@ Relever l'**ID d'application (client)** de cette inscription : c'est lui que les
 claude mcp add --transport http --client-id <id-client-mcp> --callback-port 8080 todo-api http://localhost:5000/mcp
 ```
 
-Ce qui revient à écrire dans `.mcp.json` :
+Ce qui revient à écrire un fichier `.mcp.json` à la racine du dépôt. Le modèle est fourni :
 
-```json
-{
-  "mcpServers": {
-    "todo-api": {
-      "type": "http",
-      "url": "http://localhost:5000/mcp",
-      "oauth": { "clientId": "<id-client-mcp>", "callbackPort": 8080 }
-    }
-  }
-}
+```bash
+cp .mcp.json.example .mcp.json
 ```
+
+Il ne reste qu'à y remplacer l'identifiant du client. `.mcp.json` est ignoré par Git — il porte un identifiant propre à votre tenant.
 
 **Claude web et bureau** n'ont pas de fichier de configuration équivalent : le connecteur s'ajoute par l'interface, dans **Paramètres** > **Connecteurs** > **Ajouter un connecteur personnalisé**, puis **Paramètres avancés** > *OAuth Client ID*. Le champ *OAuth Client Secret* reste vide, l'inscription étant un client public.
 

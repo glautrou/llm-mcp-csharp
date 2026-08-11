@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Configuration MCP locale : contient l'identifiant du client OAuth du tenant.
+# Le modèle versionné est .mcp.json.example
+.mcp.json
+
 # User-specific files
 *.rsuser
 *.suo
