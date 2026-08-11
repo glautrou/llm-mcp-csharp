@@ -35,7 +35,7 @@ Dans le [centre d'administration Entra](https://entra.microsoft.com), **Applicat
 
 Relever l'**ID d'application (client)** et l'**ID de l'annuaire (locataire)**.
 
-### 2. Exposer le scope
+### 2. Exposer le scope et déclarer l'URL du serveur MCP
 
 Dans l'inscription de l'API, **Exposer une API** :
 
@@ -45,19 +45,32 @@ Dans l'inscription de l'API, **Exposer une API** :
   - Consentement : administrateurs et utilisateurs
   - Nom affiché : « Gérer les tâches »
 
+Ajouter ensuite une **seconde URI d'ID d'application** : l'URL exacte du serveur MCP, chemin compris, sans barre oblique finale.
+
+```
+http://localhost:5000/mcp
+```
+
+Ce n'est pas facultatif pour Claude. Claude envoie l'URL du serveur MCP comme paramètre `resource` (RFC 8707) sur les requêtes d'autorisation et de jeton. Si cette valeur ne figure pas dans les URI d'ID d'application, Entra ID refuse d'émettre le jeton avec l'erreur `AADSTS9010010`. Ajouter aussi l'URL publique du serveur quand elle change (tunnel, hébergement).
+
+L'application accepte donc deux audiences : `api://<id-client-api>` pour les clients qui demandent le scope, et l'URL du serveur MCP pour ceux qui envoient un `resource`.
+
 ### 3. Inscrire le client MCP
 
-Le protocole MCP prévoit l'enregistrement dynamique des clients, mais Entra ID ne le prend pas en charge : le client doit donc être inscrit à l'avance.
+Le protocole MCP prévoit l'enregistrement dynamique des clients (DCR), mais Entra ID ne le prend pas en charge : les clients doivent être inscrits à l'avance.
 
 **Nouvelle inscription** :
 
 - Nom : `todo-mcp-client`
 - Type de client public / natif
-- URI de redirection selon le client utilisé :
+- URI de redirection — une seule inscription suffit pour tous les clients :
   - MCP Inspector : `http://localhost:6274/oauth/callback`
-  - Claude : l'URI indiquée par le client au moment de la connexion
+  - Claude web, application de bureau et mobile : `https://claude.ai/api/mcp/auth_callback`
+  - Claude Code : redirection en boucle locale sur un port variable, d'où `http://localhost/callback` et `http://127.0.0.1/callback` (Entra ID ignore le port pour `127.0.0.1`)
 
 Puis **Autorisations d'API** > **Ajouter une autorisation** > **Mes API** > `todo-mcp-api` > `Todos.ReadWrite`, et accorder le consentement administrateur si votre tenant l'exige.
+
+Dans Claude, le connecteur se déclare avec **Paramètres avancés** > *OAuth Client ID*, où l'on saisit l'ID de `todo-mcp-client`. Le secret client reste vide : l'inscription est un client public.
 
 ### 4. Renseigner les secrets utilisateur
 

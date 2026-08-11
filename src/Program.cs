@@ -20,6 +20,11 @@ var authority = $"https://login.microsoftonline.com/{tenantId}/v2.0";
 var audience = $"api://{apiClientId}";
 var requiredScope = "Todos.ReadWrite";
 
+// URL canonique du serveur MCP. Claude l'envoie comme paramètre `resource`
+// (RFC 8707) : Entra ID émet alors un jeton dont l'audience est cette URL,
+// et non `api://<id-client>`. Les deux audiences sont donc acceptées.
+var mcpResourceUrl = $"{serverUrl.TrimEnd('/')}/mcp";
+
 builder.Services.AddAuthentication(options =>
     {
         // Le schéma MCP répond aux appels non authentifiés par un en-tête
@@ -30,7 +35,7 @@ builder.Services.AddAuthentication(options =>
     .AddJwtBearer(options =>
     {
         options.Authority = authority;
-        options.Audience = audience;
+        options.TokenValidationParameters.ValidAudiences = [audience, mcpResourceUrl];
 
         // Sans cette ligne, ASP.NET Core renomme les claims entrants
         // (`oid` devient une longue URI de schéma). On garde les noms émis
@@ -43,7 +48,9 @@ builder.Services.AddAuthentication(options =>
         // le client MCP découvre où obtenir un jeton et pour quel scope.
         options.ResourceMetadata = new()
         {
-            Resource = serverUrl,
+            // Doit correspondre exactement à l'URL que l'utilisateur saisit
+            // dans son client, chemin compris.
+            Resource = mcpResourceUrl,
             AuthorizationServers = { authority },
             ScopesSupported = [$"{audience}/{requiredScope}"],
         };
