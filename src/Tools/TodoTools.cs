@@ -1,7 +1,10 @@
 using System.ComponentModel;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using TodoApi.Identity;
 using TodoApi.Models;
 using TodoApi.Stores;
 
@@ -12,30 +15,33 @@ namespace TodoApi.Tools;
 /// l'interface que le modèle lit pour choisir quoi appeler.
 /// </summary>
 [McpServerToolType]
+[Authorize(Policy = CallerIdentity.TodosPolicy)]
 public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger)
 {
     [McpServerTool(Name = "lister_todos")]
     [Description("Liste toutes les tâches de l'utilisateur, terminées ou non.")]
-    public IReadOnlyCollection<Todo> ListTodos() =>
-        store.GetAll(DemoUser.Id);
+    public IReadOnlyCollection<Todo> ListTodos(ClaimsPrincipal user) =>
+        store.GetAll(user.GetOwnerId());
 
     [McpServerTool(Name = "creer_todo")]
     [Description("Crée une nouvelle tâche dans la liste de l'utilisateur.")]
     public Todo CreateTodo(
+        ClaimsPrincipal user,
         [Description("Titre de la tâche")] string title,
         [Description("Indique si la tâche est importante")] bool isImportant = false) =>
         store.Add(new Todo
         {
             Title = title.Trim(),
             IsImportant = isImportant,
-            OwnerId = DemoUser.Id,
+            OwnerId = user.GetOwnerId(),
         });
 
     [McpServerTool(Name = "terminer_todo")]
     [Description("Marque une tâche comme terminée.")]
     public string CompleteTodo(
+        ClaimsPrincipal user,
         [Description("Identifiant de la tâche")] Guid id) =>
-        store.Complete(id, DemoUser.Id) is { } todo
+        store.Complete(id, user.GetOwnerId()) is { } todo
             ? $"Tâche « {todo.Title} » marquée comme terminée."
             // Erreur métier : une phrase que le modèle peut comprendre et relayer.
             : "Aucune tâche ne porte cet identifiant.";
@@ -45,13 +51,16 @@ public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger
     public string DeleteTodo(
         McpServer server,
         RequestContext<CallToolRequestParams> context,
+        ClaimsPrincipal user,
         [Description("Identifiant de la tâche")] Guid id,
         [Description("Raison de la suppression. À ne transmettre que si l'utilisateur l'a spontanément indiquée ; sinon, laisser vide et le serveur la demandera.")] string? reason = null)
     {
+        var ownerId = user.GetOwnerId();
+
         // L'importance est TOUJOURS lue côté serveur, jamais reçue en paramètre :
         // un paramètre « estImportante » pourrait être menti par le modèle
         // pour contourner la confirmation.
-        if (store.Get(id, DemoUser.Id) is not { } todo)
+        if (store.Get(id, ownerId) is not { } todo)
         {
             return "Aucune tâche ne porte cet identifiant.";
         }
@@ -60,7 +69,7 @@ public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger
         if (!todo.IsImportant)
         {
             // Delete échoue si la tâche vient d'être supprimée par un autre appel.
-            if (!store.Delete(id, DemoUser.Id))
+            if (!store.Delete(id, ownerId))
             {
                 return "Aucune tâche ne porte cet identifiant.";
             }
@@ -111,12 +120,14 @@ public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger
         if (!string.IsNullOrWhiteSpace(confirmedReason))
         {
             // Delete échoue si la tâche vient d'être supprimée par un autre appel.
-            if (!store.Delete(id, DemoUser.Id))
+            if (!store.Delete(id, ownerId))
             {
                 return "Aucune tâche ne porte cet identifiant.";
             }
 
-            logger.LogInformation("Tâche importante {TodoId} supprimée. Raison : {Reason}", id, confirmedReason);
+            logger.LogInformation(
+                "Tâche importante {TodoId} supprimée par {User}. Raison : {Reason}",
+                id, user.GetDisplayName(), confirmedReason);
             return $"Tâche importante « {todo.Title} » supprimée. Raison : {confirmedReason}";
         }
 

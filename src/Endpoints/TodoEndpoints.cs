@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using TodoApi.Identity;
 using TodoApi.Models;
 using TodoApi.Stores;
 
@@ -8,17 +10,20 @@ public static class TodoEndpoints
 {
     public static IEndpointRouteBuilder MapTodoEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/todos").WithTags("Todos");
+        var group = app.MapGroup("/api/todos")
+            .WithTags("Todos")
+            // Même exigence que pour les tools MCP : jeton valide et scope attendu.
+            .RequireAuthorization(CallerIdentity.TodosPolicy);
 
-        group.MapGet("/", (InMemoryTodoStore store) =>
-            store.GetAll(DemoUser.Id));
+        group.MapGet("/", (ClaimsPrincipal user, InMemoryTodoStore store) =>
+            store.GetAll(user.GetOwnerId()));
 
-        group.MapGet("/{id:guid}", (Guid id, InMemoryTodoStore store) =>
-            store.Get(id, DemoUser.Id) is { } todo
+        group.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, InMemoryTodoStore store) =>
+            store.Get(id, user.GetOwnerId()) is { } todo
                 ? Results.Ok(todo)
                 : Results.NotFound());
 
-        group.MapPost("/", (CreateTodoRequest request, InMemoryTodoStore store) =>
+        group.MapPost("/", (CreateTodoRequest request, ClaimsPrincipal user, InMemoryTodoStore store) =>
         {
             if (string.IsNullOrWhiteSpace(request.Title))
             {
@@ -32,19 +37,19 @@ public static class TodoEndpoints
             {
                 Title = request.Title.Trim(),
                 IsImportant = request.IsImportant,
-                OwnerId = DemoUser.Id,
+                OwnerId = user.GetOwnerId(),
             });
 
             return Results.Created($"/api/todos/{todo.Id}", todo);
         });
 
-        group.MapPost("/{id:guid}/complete", (Guid id, InMemoryTodoStore store) =>
-            store.Complete(id, DemoUser.Id) is { } todo
+        group.MapPost("/{id:guid}/complete", (Guid id, ClaimsPrincipal user, InMemoryTodoStore store) =>
+            store.Complete(id, user.GetOwnerId()) is { } todo
                 ? Results.Ok(todo)
                 : Results.NotFound());
 
-        group.MapDelete("/{id:guid}", (Guid id, InMemoryTodoStore store) =>
-            store.Delete(id, DemoUser.Id)
+        group.MapDelete("/{id:guid}", (Guid id, ClaimsPrincipal user, InMemoryTodoStore store) =>
+            store.Delete(id, user.GetOwnerId())
                 ? Results.NoContent()
                 : Results.NotFound());
 
