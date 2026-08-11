@@ -59,30 +59,63 @@ L'application accepte donc deux audiences : `api://<id-client-api>` pour les cli
 
 Le protocole MCP prévoit l'enregistrement dynamique des clients (DCR), mais Entra ID ne le prend pas en charge : les clients doivent être inscrits à l'avance.
 
-**Nouvelle inscription** :
+**Nouvelle inscription** nommée `todo-mcp-client`. Une seule inscription suffit pour tous les clients : leurs URI de redirection s'y cumulent.
 
-- Nom : `todo-mcp-client`
-- Type de client public / natif
-- URI de redirection — une seule inscription suffit pour tous les clients :
-  - MCP Inspector : `http://localhost:6274/oauth/callback`
-  - Claude web, application de bureau et mobile : `https://claude.ai/api/mcp/auth_callback`
-  - Claude Code : redirection en boucle locale sur un port variable, d'où `http://localhost/callback` et `http://127.0.0.1/callback` (Entra ID ignore le port pour `127.0.0.1`)
+Les URI s'ajoutent dans **Authentification** > **Ajouter une plateforme** > **Applications mobiles et de bureau**. C'est bien cette plateforme qu'il faut choisir, même pour une URL `https://` : elle déclare un client *public*, qui obtient ses jetons par PKCE sans secret. Les plateformes **Web** (secret obligatoire) et **Application monopage** (jeton délivré uniquement à un navigateur, via CORS) ne conviennent pas.
+
+Cocher ou saisir en URI personnalisées :
+
+```
+http://localhost:6274/oauth/callback
+https://claude.ai/api/mcp/auth_callback
+http://localhost:8080/callback
+```
+
+- la première pour MCP Inspector ;
+- la deuxième pour Claude web, bureau et mobile ;
+- la troisième pour Claude Code, qui écoute en boucle locale. Entra ID ignore le port des URI `localhost`, mais le déclarer explicitement évite toute ambiguïté. Utiliser `http://127.0.0.1:8080/callback` à la place obligerait à modifier le manifeste : le portail refuse le schéma `http` sur l'adresse IP littérale.
 
 Puis **Autorisations d'API** > **Ajouter une autorisation** > **Mes API** > `todo-mcp-api` > `Todos.ReadWrite`, et accorder le consentement administrateur si votre tenant l'exige.
 
-Dans Claude, le connecteur se déclare avec **Paramètres avancés** > *OAuth Client ID*, où l'on saisit l'ID de `todo-mcp-client`. Le secret client reste vide : l'inscription est un client public.
+Relever l'**ID d'application (client)** de cette inscription : c'est lui que les clients MCP devront présenter, Entra ID ne sachant pas les enregistrer à la volée.
+
+### 3 bis. Déclarer le client côté MCP
+
+**Claude Code** accepte l'identifiant directement dans sa configuration, sans passer par une interface :
+
+```bash
+claude mcp add --transport http --client-id <id-client-mcp> --callback-port 8080 todo-api http://localhost:5000/mcp
+```
+
+Ce qui revient à écrire dans `.mcp.json` :
+
+```json
+{
+  "mcpServers": {
+    "todo-api": {
+      "type": "http",
+      "url": "http://localhost:5000/mcp",
+      "oauth": { "clientId": "<id-client-mcp>", "callbackPort": 8080 }
+    }
+  }
+}
+```
+
+**Claude web et bureau** n'ont pas de fichier de configuration équivalent : le connecteur s'ajoute par l'interface, dans **Paramètres** > **Connecteurs** > **Ajouter un connecteur personnalisé**, puis **Paramètres avancés** > *OAuth Client ID*. Le champ *OAuth Client Secret* reste vide, l'inscription étant un client public.
 
 ### 4. Renseigner les secrets utilisateur
 
 Les valeurs réelles vivent hors du dépôt, dans le magasin de secrets de développement :
 
 ```bash
-dotnet user-secrets --project src set "AzureAd:TenantId" "<id-locataire>"
+dotnet user-secrets --project src set "AzureAd:TenantId" "<id-annuaire-locataire>"
 ```
 
 ```bash
-dotnet user-secrets --project src set "AzureAd:ClientId" "<id-client-api>"
+dotnet user-secrets --project src set "AzureAd:ClientId" "<id-application-de-todo-mcp-api>"
 ```
+
+`AzureAd:ClientId` est l'ID d'application de l'inscription **API**, celle qui expose le scope — pas celui du client MCP.
 
 `src/appsettings.json` ne contient que des emplacements vides : l'application refuse de démarrer si la configuration est absente.
 
