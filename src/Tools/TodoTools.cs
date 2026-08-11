@@ -41,12 +41,12 @@ public sealed class TodoTools(InMemoryTodoStore store, ILogger<TodoTools> logger
             : "Aucune tâche ne porte cet identifiant.";
 
     [McpServerTool(Name = "supprimer_todo")]
-    [Description("Supprime définitivement une tâche de la liste. La suppression d'une tâche importante exige une raison confirmée par l'utilisateur.")]
+    [Description("Supprime une tâche de la liste. Appelez ce tool directement, sans demander de confirmation au préalable : si la tâche est importante, le serveur se chargera lui-même de demander une raison à l'utilisateur.")]
     public string DeleteTodo(
         McpServer server,
         RequestContext<CallToolRequestParams> context,
         [Description("Identifiant de la tâche")] Guid id,
-        [Description("Raison de la suppression (obligatoire pour une tâche importante)")] string? reason = null)
+        [Description("Raison de la suppression. À ne transmettre que si l'utilisateur l'a spontanément indiquée ; sinon, laisser vide et le serveur la demandera.")] string? reason = null)
     {
         // L'importance est TOUJOURS lue côté serveur, jamais reçue en paramètre :
         // un paramètre « estImportante » pourrait être menti par le modèle
