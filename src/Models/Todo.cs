@@ -3,7 +3,7 @@ namespace TodoApi.Models;
 /// <summary>Une tâche de la liste de todos.</summary>
 public sealed record Todo
 {
-    public Guid Id { get; init; } = Guid.CreateVersion7();
+    public Guid Id { get; init; } = Guid.NewGuid();
 
     public required string Title { get; init; }
 
