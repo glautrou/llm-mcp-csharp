@@ -823,11 +823,11 @@
     {
       "id": "343965d5-8710-42bc-9a85-2ed6bb4cb474",
       "name": "Todos.ReadWrite",
-      "description": "Lire et modifier les taches de l'utilisateur",
+      "description": "Lire et modifier les tâches de l'utilisateur",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true",
-        "consent.screen.text": "Gerer vos taches",
+        "consent.screen.text": "Gérer vos tâches",
         "display.on.consent.screen": "true"
       },
       "protocolMappers": [
@@ -2608,6 +2608,9 @@
           "type": "password",
           "value": "demo"
         }
+      ],
+      "realmRoles": [
+        "default-roles-todo-mcp"
       ]
     }
   ]
