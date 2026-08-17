@@ -1,0 +1,31 @@
+# Un seul nom d'hôte public pour l'API MCP et pour Keycloak.
+# Le client MCP découvre le serveur d'autorisation à partir des métadonnées
+# de la ressource ; les garder sur la même origine évite les problèmes de
+# routage et de pare-feu entre deux hôtes distincts.
+#
+# TLS est terminé par le tunnel, en amont : ce proxy ne reçoit que du HTTP.
+# D'où le X-Forwarded-Proto forcé, sans quoi les applications en aval
+# construiraient des URL « http:// » et les clients les rejetteraient.
+:8080 {
+	# Le serveur d'autorisation : endpoints du realm et ressources statiques
+	# des pages de connexion.
+	handle /realms/* {
+		reverse_proxy keycloak:8080 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle /resources/* {
+		reverse_proxy keycloak:8080 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# Tout le reste va à l'API : /mcp, /api/todos et les métadonnées
+	# publiées sous /.well-known/oauth-protected-resource.
+	handle {
+		reverse_proxy api:8080 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+}

@@ -18,6 +18,16 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
+    },
+    "public": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "//": "Palier 3 : écoute sur toutes les interfaces pour que le proxy du tunnel, qui tourne dans un conteneur, puisse joindre l'API.",
+      "applicationUrl": "http://0.0.0.0:5000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
     }
   }
 }

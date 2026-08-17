@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using ModelContextProtocol.AspNetCore.Authentication;
 using TodoApi.Endpoints;
 using TodoApi.Identity;
@@ -79,6 +80,20 @@ builder.Services.AddMcpServer()
     .WithTools<TodoTools>();
 
 var app = builder.Build();
+
+// Derrière un proxy qui termine TLS, la requête arrive en HTTP clair.
+// Sans ces en-têtes, l'application se croit en HTTP et publie des URL
+// « http:// » dans l'en-tête WWW-Authenticate — que les clients refusent.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedFor,
+};
+// Le proxy a une adresse dynamique dans le réseau du conteneur : on ne peut
+// pas la lister à l'avance. Acceptable ici parce que l'application n'est
+// jamais exposée directement, uniquement à travers ce proxy.
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
 
 app.UseAuthentication();
 app.UseAuthorization();

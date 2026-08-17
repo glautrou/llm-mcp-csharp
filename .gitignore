@@ -481,3 +481,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Palier 3 : URL de tunnel, ephemere et propre a chaque machine
+.env
+.public-url.txt

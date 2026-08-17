@@ -7,6 +7,7 @@ Démo accompagnant l'article « Exposer une Minimal API .NET 10 à un LLM avec M
 | `v0` | API REST + serveur MCP, sans authentification |
 | `v1` | Confirmation de suppression via Multi Round-Trip Requests |
 | `v2` | Authentification OAuth 2.0 avec Keycloak, scopes et identité |
+| `v3` | Exposition publique par tunnel, pour brancher un client distant |
 
 ## Prérequis
 
@@ -78,6 +79,48 @@ npx @modelcontextprotocol/inspector
 Transport « Streamable HTTP », URL `http://localhost:5000/mcp`. Inspector lit les métadonnées publiées par le serveur, s'enregistre tout seul auprès de Keycloak et ouvre la page de connexion.
 
 Avec Claude Code, le serveur est déjà déclaré dans [`.mcp.json`](.mcp.json) ; la connexion se fait par `/mcp`. Aucun identifiant de client à saisir, là encore grâce à l'enregistrement dynamique.
+
+## Exposer publiquement (palier v3)
+
+Les clients hébergés — Claude web, mobile, bureau — appellent votre serveur depuis leurs propres machines. `localhost` ne leur dit rien : il faut une URL publique en HTTPS, pour l'API **et** pour le serveur d'autorisation, que le client interroge lui aussi.
+
+Le profil `public` ajoute trois services : l'API en conteneur, un proxy qui réunit tout derrière un seul nom d'hôte, et un tunnel Cloudflare.
+
+```bash
+docker compose --profile public up -d --build
+```
+
+Relever l'URL attribuée :
+
+```bash
+docker logs todo-mcp-tunnel 2>&1 | grep trycloudflare.com
+```
+
+L'inscrire dans un fichier `.env` à la racine, puis relancer pour que Keycloak et l'API se présentent sous cette adresse :
+
+```bash
+echo "PUBLIC_URL=https://votre-tunnel.trycloudflare.com" > .env
+```
+
+```bash
+docker compose --profile public up -d
+```
+
+Vérifier depuis n'importe quelle machine :
+
+```bash
+curl -i https://votre-tunnel.trycloudflare.com/mcp -X POST -H "Content-Type: application/json" -d '{}'
+```
+
+La réponse doit être un `401` dont l'en-tête `WWW-Authenticate` pointe vers une URL en **https**. Le serveur MCP est alors à l'adresse `https://votre-tunnel.trycloudflare.com/mcp`.
+
+Pour tout arrêter et refermer l'accès :
+
+```bash
+docker compose --profile public down
+```
+
+L'URL d'un tunnel rapide change à chaque démarrage et le service est ouvert à tous : c'est fait pour une démonstration, pas pour laisser tourner.
 
 ## Configuration de l'API
 

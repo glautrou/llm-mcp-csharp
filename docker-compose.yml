@@ -10,6 +10,11 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
+      # Adresse publique du serveur d'autorisation. En local c'est le port
+      # publié ; derrière un tunnel, l'URL publique (voir PUBLIC_URL).
+      KC_HOSTNAME: ${PUBLIC_URL:-http://localhost:8081}
+      # Faire confiance aux en-têtes du proxy quand il y en a un devant.
+      KC_PROXY_HEADERS: xforwarded
     ports:
       # 8081 côté hôte : 8080 reste libre pour la redirection OAuth des clients.
       - "8081:8080"
@@ -19,3 +24,33 @@ services:
       timeout: 5s
       retries: 30
       start_period: 20s
+
+  # Palier 3 : exposition publique. Ces deux services ne démarrent qu'avec
+  # le profil « public », pour que la démonstration locale reste minimale.
+  api:
+    build: ./src
+    image: todo-mcp-api:1
+    container_name: todo-mcp-api
+    profiles: ["public"]
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      # L'API se présente au monde sous l'URL du tunnel : c'est elle qui doit
+      # figurer dans les métadonnées et dans l'audience des jetons.
+      ServerUrl: ${PUBLIC_URL}
+      Oidc__Authority: ${PUBLIC_URL}/realms/todo-mcp
+
+  proxy:
+    build: ./proxy
+    image: todo-mcp-proxy:1
+    container_name: todo-mcp-proxy
+    profiles: ["public"]
+    depends_on: [api]
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: todo-mcp-tunnel
+    profiles: ["public"]
+    depends_on: [proxy]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://proxy:8080"]
