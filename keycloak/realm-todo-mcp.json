@@ -2612,6 +2612,24 @@
       "realmRoles": [
         "default-roles-todo-mcp"
       ]
+    },
+    {
+      "username": "demo2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Autre",
+      "lastName": "Utilisateur",
+      "email": "demo2@todo-mcp.local",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "value": "demo2"
+        }
+      ],
+      "realmRoles": [
+        "default-roles-todo-mcp"
+      ]
     }
   ]
 }

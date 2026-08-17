@@ -32,9 +32,12 @@ L'API REST répond sur `http://localhost:5000/api/todos`, le serveur MCP sur `ht
 | Usage | Identifiant | Mot de passe |
 | --- | --- | --- |
 | Utilisateur de démonstration | `demo` | `demo` |
+| Second utilisateur, pour vérifier l'isolement | `demo2` | `demo2` |
 | Console d'administration Keycloak | `admin` | `admin` |
 
 Ce sont des identifiants de démonstration locale, sans valeur secrète.
+
+Le second compte n'est pas là pour décorer : chaque utilisateur reçoit sa propre copie des tâches d'exemple à sa première visite, et ne voit jamais celles des autres. Se connecter avec `demo2` après avoir créé une tâche avec `demo` le montre en une manipulation.
 
 ## Ce que contient le realm
 
